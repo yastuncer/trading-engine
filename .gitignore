@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+*.o
+*.out
+engine
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
