@@ -1,14 +1,36 @@
 # Build artifacts
 build/
 *.o
-*.out
-engine
+*.so
+*.exe
+engine/engine        # the compiled binary from the Makefile
 
-# macOS
-.DS_Store
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
 
-# IDE
+# Data — LOBSTER files are huge, don't commit them
+data/
+*.csv
+
+# ML artifacts
+mlruns/
+*.pkl
+*.pt
+*.ckpt
+
+# Editor/OS junk
 .vscode/
 .idea/
-*.swp
-*~
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+
+# Private notes — never push these
+private/
