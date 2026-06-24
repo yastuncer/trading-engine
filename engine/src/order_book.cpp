@@ -1,4 +1,8 @@
 #include "order_book.hpp"
+#include <iostream>
+#include <string>
+#include <vector>
+#include <iomanip>
 
 // Storage & Lookup
 /*
@@ -120,5 +124,67 @@ std::optional<Order> OrderBook::cancel(OrderId id) { // parameter is named id of
 
     return cancelled;
    
+
+}
+
+
+
+// Print function --> prints the order book
+void OrderBook::print(int depth) const {
+
+    const std::string RED = "\033[31m";
+    const std::string GREEN = "\033[32m";
+    const std::string RESET = "\033[0m"; // always reset at the end of colored region
+
+    // check if order book is empty--> if bids_ & asks_ are empty 
+    if (bids_.empty() && asks_.empty()) {
+        std::cout << "(empty book)\n";
+        return;
+    }
+    std::cout << std::fixed << std::setprecision(2);
+
+    /*
+    asks --> sorted in ascending order (lowest price first)
+    but want to display the besk ask(lowest price) at the bottom section, right above the spread
+    */
+
+    std::cout << RED << "ASKS (lowest first):" << RESET << "\n";
+
+    /* collect the price levels first & then print in reverse order
+    creating an empty container to hold the collected price levels
+    go thru asks from the beginning and add to container
+    end after x depth entries or if the map runs out
+    using pointers to store instead of copying every price level
+    */
+
+   // empty vector that holds pointers to PriceLevels
+    std::vector<const PriceLevel*> top_asks;
+
+    // loop thru the asks_ map, & for each entry add a pointer to its PriceLevel into top_asks
+    int count = 0;
+    for (const auto& [price, level] : asks_) { // unpacking each map entry into 2 variables
+        if (count >= depth) {
+            break; // stop once collected depth levels
+        }
+        top_asks.push_back(&level); // storing pointers
+        count++; // keeping track of how many entries added
+    }
+
+
+    // reverse loop
+    for (auto it = top_asks.rbegin(); it != top_asks.rend(); ++it) {
+        const PriceLevel* level = *it; // dereference the iterator to get the element of the vector into level
+        Quantity total = 0; // every price level has its own total
+
+        for (const Order& o : level->orders) { // o is every individual element being iterated in the price level's orders deque
+            total += o.remaining(); // add this order's unfilled volume to the running total
+        }
+        std::cout << "  " << RED
+          << "$" << from_price(level->price)
+          << "  |  " << total << " units"
+          << "    (" << level->orders.size() << " order"
+          << (level->orders.size() == 1 ? "" : "s") << ")"
+          << RESET << "\n";
+    }
 
 }

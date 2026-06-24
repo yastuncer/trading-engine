@@ -13,8 +13,8 @@ using OrderId = std::uint64_t;
 using Timestamp = std::uint64_t;
 
 /*
- for enums --> a set of named constants that represent all
- possible states or categories of something
+enums are being used to define a type that can only hold one of a few
+specified values
  i.e. side represents if its buying or selling
 */
 enum class Side {
@@ -33,11 +33,9 @@ enum class OrderStatus {
     Rejected
 };
 
-/*
-struct --> the blueprint im using to hold group of related variables under one name
-*/
 
-// Order is like a form that gets filled out every time someone submits an order
+
+// Order is a form that gets filled out every time someone submits an order
 struct Order {
     OrderId id; // unique # for to identify order
     Side side; // buy or sell
@@ -49,7 +47,7 @@ struct Order {
     Timestamp timestamp; // time of when it was submitted
     uint64_t user_id; // which user submitted it
 
-    Quantity remaining() {
+    Quantity remaining() const {
         return quantity - filled_qty;
     }
     bool is_filled() const {
@@ -57,6 +55,7 @@ struct Order {
     }
 
 };
+
 
 struct Trade {
     OrderId buy_order_id; // which buy order was involved
@@ -73,9 +72,9 @@ Orders == inputs
 Trades == outputs
 */
 
-// inline tells the compiler it's okay if multiple files see this definition, don't treat it as a duplicate
 
-inline Timestamp now() { // timestamp is the return type
+// using inline so multiple files can include it and each gets its own copy of now() without any linker errors
+inline Timestamp now() { 
     // capturing the current point in time
     auto now = std::chrono::system_clock::now(); // auto figures out the type
     
