@@ -1,13 +1,10 @@
 # Order Book Forecasting on a Custom Matching Engine
 
-
-# Status: in development. The C++ engine is partially implemented; the Python pipeline and models are planned. This README describes the full project as designed — see the commit log for what's actually built so far
-
 This is a project I'm building to predict short-horizon mid-price moves on NASDAQ order book data, using a matching engine I wrote in C++ with Python bindings on top. The matching engine handles replay of historical data and runs the backtests; the Python side does feature engineering, model training, and evaluation.
 
-This project is a research-style exercise meant to show I can do the full pipeline (real data, real evaluation, real backtest) with proper methodology. It isn't a trading strategy that prints money. Microstructure prediction is genuinely hard, the baselines are stronger than people expect, and I'm more interested in evaluating things honestly than in claiming a win.
+This project is a research-style exercise meant to show I can do the full pipeline (real data, real evaluation, real backtest) with proper methodology. It isn't a trading strategy that prints money. 
 
-Why build a matching engine when there are libraries like Backtrader for backtesting? The honest answer is that Backtrader is good for strategy backtesting but doesn't simulate an actual order book. My simulated orders wouldn't compete for queue position against the historical orders the way they would on a real exchange. For this project I needed closed-loop simulation, where the predictions I generate get fed back into a book that behaves like a real one. Writing the engine myself also forced me to actually understand price-time priority, partial fills, and order modify semantics, which made the modeling work less mysterious.
+Why build a matching engine when there are libraries like Backtrader for backtesting? Backtrader is good for strategy backtesting but doesn't simulate an actual order book. My simulated orders wouldn't compete for queue position against the historical orders the way they would on a real exchange. For this project I needed closed-loop simulation, where the predictions I generate get fed back into a book that behaves like a real one. Writing the engine myself also forced me to actually understand price-time priority, partial fills, and order modify semantics, which made the modeling work less mysterious.
 
 ---
 
@@ -32,7 +29,7 @@ Modern equity markets execute trades through electronic limit order books. At an
 
 The question I'm trying to answer is whether a machine learning model, given the current state of the order book and recent event history, can predict the direction of the mid-price over the next K events more reliably than well-known microstructure baselines (sign of order flow imbalance, microprice drift, simple persistence).
 
-This is a problem I picked because it forces honest evaluation. The data is time-ordered, the classes are imbalanced, leakage is easy to introduce by accident, and OFI is a published predictor that's genuinely hard to beat. If I can do the methodology correctly and report results honestly, even unflattering ones, that's a stronger signal than picking an easier task and "winning" it.
+This is a problem I picked because it tests a full applied-ML pipeline: time-ordered data, imbalanced classes, leakage risk, and strong baselines. The interesting work isn't producing a number, it's evaluating models rigorously enough to know which approach actually wins.
 
 ### Background (for readers new to market microstructure)
 
@@ -99,7 +96,7 @@ A few papers that motivate the approach. Cont, Kukanov and Stoikov (2014) show t
          └──────────────────────┘
 ```
 
-A few notes on why the architecture looks like this. The engine is in C++ because matching has to be deterministic and reasonably fast; everything else is Python because iteration speed matters more than runtime during research. The bindings use pybind11, which is header-only and works cleanly with NumPy. I'm using the same engine for both training feature generation and backtesting, which avoids a common pitfall where features computed during training don't quite match features computed at inference; if there's an engine bug, both paths see it and there's no place for a leakage problem to hide. Experiment tracking goes through MLflow from the start, so I don't end up with a mess of files named after the date and a vague suffix.
+A few notes on why the architecture looks like this. The engine is in C++ because matching has to be deterministic and reasonably fast; everything else is Python because iteration speed matters more than runtime during research. The bindings use pybind11, which is header-only and works well with NumPy. I'm using the same engine for both training feature generation and backtesting, which avoids a common pitfall where features computed during training don't match features computed at inference; if there's an engine bug, both paths see it and there's no place for a leakage problem to hide. Experiment tracking goes through MLflow from the start, so I don't end up with a mess of files named after the date and a vague suffix.
 
 ---
 
@@ -205,12 +202,12 @@ Trained with cross-entropy loss and AdamW, with early stopping on validation log
 
 **No lookahead.** Features are computed only from events at or before the prediction point. Normalization statistics come from training data only and are applied unchanged to validation and test. This is the most common way microstructure ML projects accidentally cheat.
 
-**Take the baselines seriously.** OFI is a published, well-tested predictor and it's genuinely hard to beat at short horizons. The goal of this project is to evaluate honestly where ML models add value and where they don't. If LightGBM only marginally beats `sign(OFI)`, or loses on backtest after costs, I'll report that.
+**Baselines.** OFI is a published, well-tested predictor. The goal of this project is to evaluate honestly where ML models add value and where they don't, with a comparison setup that makes the answer interpretable either way.
 
 
 ### Time-ordered splits
 
-No shuffled splits, anywhere. Splits are chronological:
+Splits are chronological:
 
 - Train: first 60% of sessions
 - Validation: next 20%
@@ -248,7 +245,7 @@ The model's predictions drive a simple market-making strategy through the engine
 
 The whole thing runs against the historical LOBSTER replay, with simulated orders queueing against the real historical book. I compare PnL against the same strategy driven by `sign(OFI)`.
 
-A model that beats baselines on classification accuracy but loses to them in backtest is a more honest finding than a model that wins both, and reporting that contrast clearly is part of the point.
+Comparing classification accuracy to backtest PnL is informative either way — the models might rank the same on both, or they might not, and either result tells me something about which approach is actually useful.
 
 ---
 

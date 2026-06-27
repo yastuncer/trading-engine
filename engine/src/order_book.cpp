@@ -148,7 +148,7 @@ void OrderBook::print(int depth) const {
     but want to display the besk ask(lowest price) at the bottom section, right above the spread
     */
 
-    std::cout << RED << "ASKS (lowest first):" << RESET << "\n";
+    std::cout << "\n" << RED << "ASKS (lowest first):" << RESET << "\n";
 
     /* collect the price levels first & then print in reverse order
     creating an empty container to hold the collected price levels
@@ -203,7 +203,7 @@ void OrderBook::print(int depth) const {
     }
 
 
-    std::cout << GREEN << "BIDS (highest first):" << RESET << "\n";
+    std::cout << "\n" << GREEN << "BIDS (highest first):" << RESET << "\n";
 
     int bids_count = 0;
     for (const auto& [price, level] : bids_) {
