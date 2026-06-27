@@ -161,13 +161,13 @@ void OrderBook::print(int depth) const {
     std::vector<const PriceLevel*> top_asks;
 
     // loop thru the asks_ map, & for each entry add a pointer to its PriceLevel into top_asks
-    int count = 0;
+    int asks_count = 0;
     for (const auto& [price, level] : asks_) { // unpacking each map entry into 2 variables
-        if (count >= depth) {
+        if (asks_count >= depth) {
             break; // stop once collected depth levels
         }
         top_asks.push_back(&level); // storing pointers
-        count++; // keeping track of how many entries added
+        asks_count++; // keeping track of how many entries added
     }
 
 
@@ -187,4 +187,45 @@ void OrderBook::print(int depth) const {
           << RESET << "\n";
     }
 
+    /*
+    Spread = best ask - best bid
+    it's the gap
+    */
+
+    // making sure both maps are not empty then getting the best prices
+    if (!bids_.empty() && !asks_.empty()) { // if bids is not empty && asks is not empty
+        Price best_bid_price = bids_.begin()->first; // return entry to 1st entry (the price)
+        Price best_ask_price = asks_.begin()->first;
+        Price spread = best_ask_price - best_bid_price;
+        std::cout << "\n ─── SPREAD: $" << from_price(spread) << " ───\n\n";
+    } else {
+        std::cout << "\n ─── (one side is empty, therefore no spread) ───\n\n";
+    }
+
+
+    std::cout << GREEN << "BIDS (highest first):" << RESET << "\n";
+
+    int bids_count = 0;
+    for (const auto& [price, level] : bids_) {
+        if (bids_count >= depth) {
+            break;
+        }
+        Quantity total = 0;
+        for (const Order& o : level.orders) { // level.order is a direct reference not a pointer
+            total += o.remaining();
+        }
+        std::cout << "  " << GREEN
+          << "$" << from_price(level.price)
+          << "  |  " << total << " units"
+          << "    (" << level.orders.size() << " order"
+          << (level.orders.size() == 1 ? "" : "s") << ")"
+          << RESET << "\n";
+        bids_count++;
+    }
+
+
+
+
 }
+
+

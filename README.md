@@ -201,7 +201,12 @@ Trained with cross-entropy loss and AdamW, with early stopping on validation log
 
 ## 5. Evaluation methodology
 
-This is the part of the project I care most about getting right.
+### Two principles I'm being deliberate about
+
+**No lookahead.** Features are computed only from events at or before the prediction point. Normalization statistics come from training data only and are applied unchanged to validation and test. This is the most common way microstructure ML projects accidentally cheat.
+
+**Take the baselines seriously.** OFI is a published, well-tested predictor and it's genuinely hard to beat at short horizons. The goal of this project is to evaluate honestly where ML models add value and where they don't. If LightGBM only marginally beats `sign(OFI)`, or loses on backtest after costs, I'll report that.
+
 
 ### Time-ordered splits
 

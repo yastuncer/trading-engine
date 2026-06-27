@@ -15,25 +15,12 @@ Declaration of what the OrderBook class is
 #include <optional> // std::optional — a value that might not exist
 
 
+// PriceLevel represents a bucket that holds all orders at one particular price
 struct PriceLevel {
     Price price; // the price this level represents
-    std::deque<Order> orders; // all orders sitting at this price, in FIFO order
+    std::deque<Order> orders; // all orders sitting at this price, in FIFO order in a deque container
 };
 
-/*
-PriceLevel {
-    price: 150.50
-    orders: [ Order#1, Order#2, Order#4 ]   ← this is the deque
-                 ↑                    ↑
-              front                  back
-           (fills first)        (arrived last)
-}
-*/
-
-/* std::deque is a data structure to hold the orders placed (FIFO order), 
-Order (Order objects) is the type of thing stored inside the deque
-orders is the variable name. it is the actual deque living inside each PriceLevel.
-*/
 
 struct OrderLocation {
     Side side; // is this order a bid or an ask
@@ -48,15 +35,17 @@ class OrderBook {
         std::optional<Order> cancel(OrderId id); // remove an order, return if its found else nothing
         std::optional<PriceLevel*> best_bid(); // top of bids (highest asks), or nothing if empty
         std::optional<PriceLevel*> best_ask(); // top of asks (lowest price), '''
-        void print(int depth = 5) const; // print top N levels for debugging; const = doesn't modify the book
+        void print(int depth = 5) const; // print top N levels (default value) for debugging; const = doesn't modify the book
 
 
     private:
-        // bids: highest price first
-        std::map<Price, PriceLevel, std::greater<Price>> bids_; // sorted map of price, std::greater sorts highest price first
+        // bids: highest price first (sorted that way cuz of greater)
+        // bids_ is a map, the map contains key&value (keys are Prices, && values are PriceLevels)
+        std::map<Price, PriceLevel, std::greater<Price>> bids_; 
 
-        // asks: lowest price first
-        std::map<Price, PriceLevel, std::less<Price>> asks_; // sorted map of price, std::less sorts by lowest price first
+        // asks: lowest price first (sorted that way cuz of less)
+        // asks_ is a map that holds key&value pairs (key--> Price && value --> PriceLevel)
+        std::map<Price, PriceLevel, std::less<Price>> asks_; 
 
         // fast lookup: order id --> where it lives in the book
         std::unordered_map<OrderId, OrderLocation> order_locations_; // hash map from order ID → its location (side + price)
@@ -64,3 +53,6 @@ class OrderBook {
 
 
 #endif
+
+
+
