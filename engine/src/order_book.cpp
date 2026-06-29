@@ -3,6 +3,10 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include "matching_engine.hpp"
+#include "types.hpp"
+#include "order_book.hpp"
+
 
 // Storage & Lookup
 /*
@@ -223,9 +227,107 @@ void OrderBook::print(int depth) const {
         bids_count++;
     }
 
+}
 
 
+// Best bid helper function
+const PriceLevel* OrderBook::best_bid() const {
+    if (bids_.empty()) { // returns true if the map has 0 entries
+        return nullptr;
+    }
+    return &bids_.begin()->second; 
+}
 
+/*
+bids_.begin() --> returns an iterator pointing at the first entry of bids_
+that iterator points -> second which gives the value (the Price Level) at that first entry
+if it were iterator -> first then it gives the key (the Price)
+*/
+
+
+// Best ask helper function
+const PriceLevel* OrderBook::best_ask() const {
+    if (asks_.empty()) { // returns true if the map has 0 entries
+        return nullptr;
+    }
+    return &asks_.begin()->second; 
+}
+
+
+/*
+apply_fill(id, fill_qty):
+
+    1. look up id in order_locations
+    2. if not found, return false
+    3. find the right map (bids_ or asks_) based on side from location
+    4. find the price level in that map at that location's price
+    5. find the order in the level's deque
+    6. increment the order's filled_qty by fill_qty
+    7. if the order is now filled:
+        a. erase order from deque
+        b. if the deque is now empty, erase price level from map
+        c. erase id from order_locations_
+    8. if order is partialy filled, do nothing more
+    9. return true
+*/
+
+bool OrderBook::apply_fill(OrderId id, Quantity fill_qty){
+
+    // step 1
+    auto it = order_locations_.find(id);
+    if (it == order_locations_.end()) {
+        return false;
+    }
+
+    // step 2-4
+    if (it->second.side == Side::Buy) { // if
+        // find price levels in bids_
+        // price_it is an instance of PriceLevel
+        auto price_it = bids_.find(it->second.price); // finding the order_locations_s price 
+        if (price_it == bids_.end()) {
+            return false;
+        }
+        // step 5
+        PriceLevel& level = price_it->second; // level is a reference to PriceLevel (so i can modify the map entry)
+        for (auto order_it = level.orders.begin(); order_it!=level.orders.end(); ++order_it) {
+            // step 6-8
+            if (order_it->id == id) {
+                order_it->filled_qty += fill_qty;
+                if(order_it->is_filled()) {
+                    level.orders.erase(order_it);
+                    if (level.orders.empty()) {
+                        bids_.erase(price_it);
+                    }
+                    order_locations_.erase(id);
+                }
+                // step 9
+                return true;
+            }
+        }
+    } else { // for asks
+        auto price_it = asks_.find(it->second.price);
+        if (price_it == asks_.end()){
+            return false;
+        }
+        PriceLevel& level = price_it->second;
+        for (auto order_it = level.orders.begin(); order_it!=level.orders.end(); ++order_it) {
+            // step 6-8
+            if (order_it->id == id) {
+                order_it->filled_qty += fill_qty;
+                if(order_it->is_filled()) {
+                    level.orders.erase(order_it);
+                    if (level.orders.empty()) {
+                        asks_.erase(price_it);
+                    }
+                    order_locations_.erase(id);
+                }
+                // step 9
+                return true;
+            }
+        }
+
+    }
+    return false;
 }
 
 

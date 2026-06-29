@@ -20,6 +20,7 @@ Decide what happens to leftover quantity
 #include <optional>
 #include <vector>
 #include "order_book.hpp"
+#include "matching_engine.hpp"
 
 
 
@@ -32,7 +33,8 @@ struct MatchResult {
 
 class MatchingEngine {
     public:
-        MatchResult process(Order order);
+        MatchResult process(const Order& order);
+        const OrderBook& get_book() const;
 
     private:
         OrderBook book_;

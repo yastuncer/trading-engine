@@ -33,9 +33,11 @@ class OrderBook {
     public:
         void add(Order order); // add a new order to the Order book
         std::optional<Order> cancel(OrderId id); // remove an order, return if its found else nothing
-        std::optional<PriceLevel*> best_bid(); // top of bids (highest asks), or nothing if empty
-        std::optional<PriceLevel*> best_ask(); // top of asks (lowest price), '''
+        const PriceLevel* best_bid() const; // top of bids (highest asks), or nothing if empty
+        const PriceLevel* best_ask() const; // top of asks (lowest price), '''
         void print(int depth = 5) const; // print top N levels (default value) for debugging; const = doesn't modify the book
+        bool apply_fill(OrderId id, Quantity fill_qty);
+
 
 
     private:
