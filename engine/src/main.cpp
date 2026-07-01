@@ -5,7 +5,7 @@
 int main() {
     MatchingEngine engine;
     
-    // Set up the book with some resting sell orders
+    // setting up the book with some resting sell orders
     engine.process({1, Side::Sell, OrderType::Limit, to_price(151.00), 30, 0,
                     OrderStatus::New, now(), 100});
     engine.process({2, Side::Sell, OrderType::Limit, to_price(151.50), 60, 0,
@@ -14,12 +14,12 @@ int main() {
     std::cout << "Book after adding two sell orders:\n";
     engine.get_book().print();
     
-    // Now send in a buy order that should match
+    // sending in a buy order that should match
     std::cout << "\n--- Sending buy 50 @ $151.20 ---\n";
     MatchResult result = engine.process({3, Side::Buy, OrderType::Limit, to_price(151.20), 50, 0,
                                          OrderStatus::New, now(), 200});
     
-    // Print what happened
+    // print what happened
     std::cout << "Trades executed: " << result.trades.size() << "\n";
     for (const Trade& t : result.trades) {
         std::cout << "  Trade: buy#" << t.buy_order_id 
@@ -57,6 +57,111 @@ int main() {
     }
     std::cout << "Book:\n";
     engine.get_book().print();
+
+    // test 3: sell-side matching
+    std::cout << "\n--- Test 3: sell hits the existing bid ---\n";
+    std::cout << "Book before:\n";
+    engine.get_book().print();
+
+    // we have a resting bid at $151.20 with 20 units from earlier.
+    // send a sell at $151.10 for 10 units. should match against the bid.
+    // (sell willing to sell at $151.10 or higher; bid willing to pay $151.20. they cross.)
+    MatchResult result3 = engine.process({5, Side::Sell, OrderType::Limit, to_price(151.10), 10, 0,
+                                           OrderStatus::New, now(), 300});
+
+    std::cout << "Trades: " << result3.trades.size() << "\n";
+    for (const Trade& t : result3.trades) {
+        std::cout << "  buy#" << t.buy_order_id << " <-> sell#" << t.sell_order_id
+                  << " at $" << from_price(t.price) << " for " << t.quantity << " units\n";
+    }
+
+    std::cout << "Status: ";
+    switch (result3.status) {
+        case OrderStatus::Filled: std::cout << "Filled\n"; break;
+        case OrderStatus::PartiallyFilled: std::cout << "PartiallyFilled\n"; break;
+        case OrderStatus::New: std::cout << "New\n"; break;
+        default: std::cout << "Other\n"; break;
+    }
+
+    std::cout << "Book after:\n";
+    engine.get_book().print();
+
+
+    // test 4: order that doesn't match at all
+    std::cout << "\n --- Test 4: order that doesn't match at all\n";
+    std::cout << "Book before:\n";
+    engine.get_book().print();
+
+    // we have a sell at $200 for 100 units - which is above any bid therefore nothing to match against
+    // should be trades: 0, status: new, book: should have a new ask at $200 for 100 units, 
+    // and the existing bid at $151.20 for 10 units 
+
+    MatchResult result4 = engine.process({6, Side::Sell, OrderType::Limit, to_price(200), 100, 0,
+                                           OrderStatus::New, now(), 400});
+    
+    std::cout << "Trades: " << result4.trades.size() << "\n";
+    for (const Trade& t : result4.trades) {
+        std::cout << "  buy#" << t.buy_order_id << " <-> sell#" << t.sell_order_id
+                  << " at $" << from_price(t.price) << " for " << t.quantity << " units\n";
+    }
+    
+    
+    std::cout << "Status: ";
+    switch (result4.status) {
+        case OrderStatus::Filled: std::cout << "Filled\n"; break;
+        case OrderStatus::PartiallyFilled: std::cout << "PartiallyFilled\n"; break;
+        case OrderStatus::New: std::cout << "New\n"; break;
+        default: std::cout << "Other\n"; break;
+    }
+
+    std::cout << "Book after:\n";
+    engine.get_book().print();
+
+
+    // test 5: FIFO at the same price level (each entry in bids_ or asks_ has its own independent queue)
+    // when multiple orders rest at the same price, an incoming order 
+    // should consume them in the order they arrived
+
+    std::cout << "\n --- Test 5: FIFO at the same price level\n";
+    std::cout << "Book before:\n";
+    engine.get_book().print();
+
+    // Buy #7
+    engine.process({7, Side::Buy, OrderType::Limit, to_price(100), 30, 0,
+    OrderStatus::New, now(), 500});
+    
+    // Buy #8
+    engine.process({8, Side::Buy, OrderType::Limit, to_price(100), 30, 0,
+    OrderStatus::New, now(), 600});
+
+    // Buy #9
+    engine.process({9, Side::Buy, OrderType::Limit, to_price(100), 40, 0,
+    OrderStatus::New, now(), 700});
+
+    // Result5 stores the incoming sell #10 at $100 for 80 units
+    MatchResult result5 = engine.process({10, Side::Sell, OrderType::Limit, to_price(100), 80, 0,
+    OrderStatus::New, now(), 800});
+
+    std::cout << "Trades: " << result5.trades.size() << "\n";
+    for (const Trade& t : result5.trades) {
+        std::cout << "  buy#" << t.buy_order_id << " <-> sell#" << t.sell_order_id
+                  << " at $" << from_price(t.price) << " for " << t.quantity << " units\n";
+    }
+
+    std::cout << "Status: ";
+    switch (result5.status) {
+        case OrderStatus::Filled: std::cout <<"Filled\n"; break;
+        case OrderStatus::PartiallyFilled: std::cout << "PartiallyFilled\n"; break;
+        case OrderStatus::New: std::cout << "New\n"; break;
+        default: std::cout << "Other\n"; break;
+    }
+    
+    std::cout <<"Book after:\n";
+    engine.get_book().print();
+
+
+
+    
     
     return 0;
 }
