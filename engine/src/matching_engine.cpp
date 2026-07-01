@@ -18,22 +18,22 @@ it ended up on the book
 MatchResult MatchingEngine::process(const Order& order) {
 
     MatchResult result;
-    Order incoming_order = order;
+    Order incoming_order = order; // copy into a local variable to modify it durint matching
 
-    if (incoming_order.side == Side::Buy) { // buy branch
+    if (incoming_order.side == Side::Buy) { // buy branch --> match against asks (sell orders)
         while (incoming_order.remaining() > 0) { // while the incoming order still has unfilled quantity, keep matching.
             const PriceLevel* best_ask_level = book_.best_ask(); // calling best_ask() on the order book and then returns a ptr to best ask's PriceLevel
             if (best_ask_level == nullptr) break; //checking if there are asks in the book
             if (best_ask_level->price > incoming_order.price) break; // making sure the best ask price is not > incoming price
-            const Order& resting = best_ask_level->orders.front(); // get the first order in the deque
+            const Order& resting = best_ask_level->orders.front(); // get the first order in the deque by returning a ref to first order
 
-            // compute how much fills
-            Quantity fill_qty = std::min(incoming_order.remaining(), resting.remaining()); // min returns the smaller of the 2 values
+            // compute how much fills needed
+            Quantity fill_qty = std::min(incoming_order.remaining(), resting.remaining()); // min returns the smaller of the 2 values, 3 possible scenarios min() handles
             // creating the trade
             Trade trade;
             trade.buy_order_id = incoming_order.id;
             trade.sell_order_id = resting.id;
-            trade.price = resting.price;
+            trade.price = resting.price; // resting order arrived first and committed to its price
             trade.quantity = fill_qty;
             trade.timestamp = now();
 
@@ -45,7 +45,7 @@ MatchResult MatchingEngine::process(const Order& order) {
             book_.apply_fill(resting.id, fill_qty);
         }
     } else {
-        // sell branch
+        // sell branch --> match against bids (buy orders)
         while(incoming_order.remaining() > 0) {
             const PriceLevel* best_bid_level = book_.best_bid();
             if(best_bid_level == nullptr) break;
@@ -73,16 +73,16 @@ MatchResult MatchingEngine::process(const Order& order) {
     }
     // rest the leftover (this is only for limit orders with remaining quantity)
     if (incoming_order.remaining() > 0 && incoming_order.type == OrderType::Limit) {
-        book_.add(incoming_order);
-        result.resting_order = incoming_order;
+        book_.add(incoming_order); // add order to the book
+        result.resting_order = incoming_order; // leftover ends up in the book
     }
     // setting the status based on fill state
     if (incoming_order.is_filled()) {
-        result.status = OrderStatus::Filled;
+        result.status = OrderStatus::Filled; // order is completely full
     } else if (incoming_order.filled_qty > 0) {
-        result.status = OrderStatus::PartiallyFilled;
+        result.status = OrderStatus::PartiallyFilled; // order is partially filled
     } else {
-       result.status = OrderStatus::New;
+       result.status = OrderStatus::New; // no matches happened
     }
 
     return result;
