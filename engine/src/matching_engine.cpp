@@ -24,7 +24,9 @@ MatchResult MatchingEngine::process(const Order& order) {
         while (incoming_order.remaining() > 0) { // while the incoming order still has unfilled quantity, keep matching.
             const PriceLevel* best_ask_level = book_.best_ask(); // calling best_ask() on the order book and then returns a ptr to best ask's PriceLevel
             if (best_ask_level == nullptr) break; //checking if there are asks in the book
-            if (best_ask_level->price > incoming_order.price) break; // making sure the best ask price is not > incoming price
+            if (incoming_order.type == OrderType::Limit) { // limit-specific;
+                if (best_ask_level->price > incoming_order.price) break; // making sure the best ask price is not > incoming price (price check)
+            }
             const Order& resting = best_ask_level->orders.front(); // get the first order in the deque by returning a ref to first order
 
             // compute how much fills needed
@@ -49,7 +51,9 @@ MatchResult MatchingEngine::process(const Order& order) {
         while(incoming_order.remaining() > 0) {
             const PriceLevel* best_bid_level = book_.best_bid();
             if(best_bid_level == nullptr) break;
-            if(best_bid_level->price < incoming_order.price) break;
+            if (incoming_order.type == OrderType::Limit) { // Limit specific
+                if(best_bid_level->price < incoming_order.price) break;
+            }
             const Order& resting = best_bid_level->orders.front();
 
             // compute how much fills
