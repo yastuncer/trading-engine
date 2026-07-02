@@ -5,7 +5,7 @@
 int main() {
     MatchingEngine engine;
     
-    // setting up the book with some resting sell orders
+    // setting up the book with some resting sell orders (limit)
     engine.process({1, Side::Sell, OrderType::Limit, to_price(151.00), 30, 0,
                     OrderStatus::New, now(), 100});
     engine.process({2, Side::Sell, OrderType::Limit, to_price(151.50), 60, 0,
@@ -159,9 +159,84 @@ int main() {
     std::cout <<"Book after:\n";
     engine.get_book().print();
 
+    // Market Order Test (leftover vanishes)
+    std:: cout << "\n --- Test 6: Market Order Test (leftover vanishes)\n";
+    std:: cout << "Book before:\n";
+    engine.get_book().print();
 
-
+    // Buy #11
+    engine.process({11, Side::Buy, OrderType::Market, to_price(450), 40, 0,
+    OrderStatus::New, now(), 800});
     
+    // Buy #13
+    engine.process({12, Side::Buy, OrderType::Market, to_price(450), 40, 0,
+    OrderStatus::New, now(), 800});
+
+    // Buy #13
+    engine.process({13, Side::Buy, OrderType::Market, to_price(450), 40, 0,
+    OrderStatus::New, now(), 800});
+
+    // Result6 market buy for 80 units
+    MatchResult result6 = engine.process({14, Side::Sell, OrderType::Market, to_price(420), 80, 0,
+    OrderStatus::New, now(), 800});
+
+    std::cout << "Trades: " << result6.trades.size() << "\n";
+    for (const Trade& t : result6.trades) {
+        std::cout << "  buy#" << t.buy_order_id << " <-> sell#" << t.sell_order_id
+                  << " at $" << from_price(t.price) << " for " << t.quantity << " units\n";
+    }
+
+    std::cout << "Status: ";
+    switch (result6.status) {
+        case OrderStatus::Filled: std::cout <<"Filled\n"; break;
+        case OrderStatus::PartiallyFilled: std::cout << "PartiallyFilled\n"; break;
+        case OrderStatus::New: std::cout << "New\n"; break;
+        default: std::cout << "Other\n"; break;
+    }
+
+    std::cout <<"Book after:\n";
+    engine.get_book().print();
+
+
+    // Market Order Test (walks multiple levels)
+    std:: cout << "\n --- Test 7: Market Order Test (Walks multiple levels) \n";
+    std:: cout << "Book before:\n";
+    engine.get_book().print();
+
+    // Sell 15
+    engine.process({15, Side::Sell, OrderType::Limit, to_price(250), 20, 0,
+    OrderStatus::New, now(), 900});
+
+    // Sell 16
+    engine.process({16, Side::Sell, OrderType::Limit, to_price(275), 30, 0,
+    OrderStatus::New, now(), 905});
+
+    // Sell 17
+    engine.process({17, Side::Sell, OrderType::Limit, to_price(300), 50, 0,
+    OrderStatus::New, now(), 910});
+
+    // Result6 stores the 
+    MatchResult result7 = engine.process({18, Side::Buy, OrderType::Market, to_price(0), 80, 0,
+    OrderStatus::New, now(), 800});
+
+    std::cout << "Trades: " << result7.trades.size() << "\n";
+    for (const Trade& t : result7.trades) {
+        std::cout << "  buy#" << t.buy_order_id << " <-> sell#" << t.sell_order_id
+                  << " at $" << from_price(t.price) << " for " << t.quantity << " units\n";
+    }
+
+    std::cout << "Status: ";
+    switch (result7.status) {
+        case OrderStatus::Filled: std::cout <<"Filled\n"; break;
+        case OrderStatus::PartiallyFilled: std::cout << "PartiallyFilled\n"; break;
+        case OrderStatus::New: std::cout << "New\n"; break;
+        default: std::cout << "Other\n"; break;
+    }
+
+    std::cout <<"Book after:\n";
+    engine.get_book().print();
+
+
     
     return 0;
 }
