@@ -33,8 +33,8 @@ struct MatchResult {
 
 class MatchingEngine {
     public:
-        MatchResult process(const Order& order);
-        const OrderBook& get_book() const;
+        MatchResult process(const Order& order); // getting a const reference to the caller's Order, not copy (wasteful cuz Order has 9 fields)
+        const OrderBook& get_book() const; // returning a const reference to the OrderBook
 
     private:
         OrderBook book_;

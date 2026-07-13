@@ -331,3 +331,12 @@ bool OrderBook::apply_fill(OrderId id, Quantity fill_qty){
 }
 
 
+void OrderBook::clear() {
+
+   bids_.clear();
+   asks_.clear();
+   order_locations_.clear();
+
+}
+
+

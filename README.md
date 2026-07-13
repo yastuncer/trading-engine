@@ -6,6 +6,21 @@ This project is a research-style exercise meant to show I can do the full pipeli
 
 Why build a matching engine when there are libraries like Backtrader for backtesting? Backtrader is good for strategy backtesting but doesn't simulate an actual order book. My simulated orders wouldn't compete for queue position against the historical orders the way they would on a real exchange. For this project I needed closed-loop simulation, where the predictions I generate get fed back into a book that behaves like a real one. Writing the engine myself also forced me to actually understand price-time priority, partial fills, and order modify semantics, which made the modeling work less mysterious.
 
+
+Raw Nasdaq ITCH data (Databento)
+        ↓
+    Parser (Python)
+        ↓
+  C++ matching engine ()
+        ↓
+   Reconstructed order book states
+        ↓
+    Feature extraction (order book imbalance, microprice, etc.)
+        ↓
+       ML model (predicts short-horizon price moves)
+        ↓
+     Backtest inside my own engine
+
 ---
 
 ## Table of Contents
@@ -29,7 +44,7 @@ Modern equity markets execute trades through electronic limit order books. At an
 
 The question I'm trying to answer is whether a machine learning model, given the current state of the order book and recent event history, can predict the direction of the mid-price over the next K events more reliably than well-known microstructure baselines (sign of order flow imbalance, microprice drift, simple persistence).
 
-This is a problem I picked because it tests a full applied-ML pipeline: time-ordered data, imbalanced classes, leakage risk, and strong baselines. The interesting work isn't producing a number, it's evaluating models rigorously enough to know which approach actually wins.
+This is a problem I picked because it tests a full applied-ML pipeline: time-ordered data, imbalanced classes, leakage risk, and strong baselines. I am evaluating models rigorously enough to know which approach actually wins.
 
 ### Background (for readers new to market microstructure)
 
@@ -49,14 +64,14 @@ A few papers that motivate the approach. Cont, Kukanov and Stoikov (2014) show t
 
 ```
 ┌──────────────────┐
-│ LOBSTER messages │   raw event-by-event NASDAQ data
-│   (CSV input)    │
+│ DATABENTO messages │   raw event-by-event NASDAQ data
+│   (DBN input)    │
 └────────┬─────────┘
          │
-         ▼
+         ▼             
 ┌──────────────────┐
-│  Message parser  │   LOBSTER msg type → engine command
-│     (Python)     │
+│  Message parser  │   DATABENTO msg type → engine command (my translator)
+│     (Python)     │    
 └────────┬─────────┘
          │
          ├──────────────────────┐
