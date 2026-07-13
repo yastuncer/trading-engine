@@ -37,6 +37,7 @@ class OrderBook {
         const PriceLevel* best_ask() const; // top of asks (lowest price), '''
         void print(int depth = 5) const; // print top N levels (default value) for debugging; const = doesn't modify the book
         bool apply_fill(OrderId id, Quantity fill_qty);
+        void clear(); // for reseting the market at the start of the day
 
 
 

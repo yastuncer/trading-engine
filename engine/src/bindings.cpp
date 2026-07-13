@@ -68,8 +68,8 @@ PYBIND11_MODULE(trading_engine, m) {
         .def(py::init<>())
         .def("add", &OrderBook::add)
         .def("cancel", &OrderBook::cancel)
-        .def("best_bid", &OrderBook::best_bid)
-        .def("best_ask", &OrderBook::best_ask)
+        .def("best_bid", &OrderBook::best_bid, py::return_value_policy::reference_internal)
+        .def("best_ask", &OrderBook::best_ask, py::return_value_policy::reference_internal)
         .def("print", &OrderBook::print, py::arg("depth") = 5)
         .def("apply_fill", &OrderBook::apply_fill)
         .def("clear", &OrderBook::clear);

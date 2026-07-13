@@ -3,18 +3,26 @@ build/
 *.o
 *.so
 *.exe
-engine/engine        # the compiled binary from the Makefile
+
+# the compiled binary from the Makefile
+engine/engine        
 
 # Python
 __pycache__/
 *.pyc
 .venv/
 venv/
-.env
+.env*
+*.log
+.mypy_cache/
+.pytest_cache/
 
-# Data — LOBSTER files are huge, don't commit them
+
+# Market data — files are huge, don't commit them
 data/
 *.csv
+*.dbn
+*.dbn.zst
 
 # ML artifacts
 mlruns/
@@ -34,3 +42,5 @@ Thumbs.db
 
 # Private notes — never push these
 private/
+
+
