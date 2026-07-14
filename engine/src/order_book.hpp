@@ -13,6 +13,7 @@ Declaration of what the OrderBook class is
 #include <deque> // std::deque — double-ended queue
 #include <unordered_map> // std::unordered_map — fast hash map
 #include <optional> // std::optional — a value that might not exist
+#include <vector> // std::vector — dynamic array (for preview_match results)
 
 
 // PriceLevel represents a bucket that holds all orders at one particular price
@@ -37,6 +38,10 @@ class OrderBook {
         const PriceLevel* best_ask() const; // top of asks (lowest price), '''
         void print(int depth = 5) const; // print top N levels (default value) for debugging; const = doesn't modify the book
         bool apply_fill(OrderId id, Quantity fill_qty);
+        bool reduce_order(OrderId id, Quantity by_qty); // shrink an order by by_qty; remove it if that empties it. returns if found
+        // read-only walk: which resting orders would `incoming` consume, in price-time
+        // priority, WITHOUT touching the book. cheap (visits only the orders it fills).
+        std::vector<Trade> preview_match(const Order& incoming) const;
         void clear(); // for reseting the market at the start of the day
 
 

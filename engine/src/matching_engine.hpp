@@ -34,10 +34,15 @@ struct MatchResult {
 class MatchingEngine {
     public:
         MatchResult process(const Order& order); // getting a const reference to the caller's Order, not copy (wasteful cuz Order has 9 fields)
+        MatchResult simulate(const Order& order) const; // dry-run: what process() WOULD do, without mutating the book (for reconciliation)
         const OrderBook& get_book() const; // returning a const reference to the OrderBook
 
     private:
         OrderBook book_;
+
+        // shared matching core: mutates the book it's handed. process() runs it on
+        // the real book_; simulate() runs it on a throwaway copy so the book_ is untouched.
+        static MatchResult match_impl(OrderBook& book, const Order& order);
 
 };
 
