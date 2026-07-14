@@ -56,8 +56,23 @@ skipped_clusters = 0
 skipped_actions = {'F_only': 0, 'T_only': 0, 'other': 0}
 
 
+def apply_truth(cluster):
+    """Advance the authoritative book to ground truth by applying each Databento F
+    to the order it actually names. This — not the engine's own matching — is what
+    keeps the book in sync with reality."""
+    global applied_fills_count, apply_fill_failures
+    for event in cluster:
+        if event.action == 'F':
+            if book.apply_fill(event.order_id, event.size):
+                applied_fills_count += 1
+            else:
+                apply_fill_failures += 1
+
+
 def close_cluster(cluster):
-    """Reconstruct the aggressor from a T/F cluster and process it through the engine."""
+    """Reconstruct the aggressor from a T/F cluster, compare what our engine WOULD
+    fill (engine.simulate, read-only) against Databento's actual fills, then advance
+    the book to ground truth by applying those actual fills."""
     global next_synthetic_id, skipped_clusters, applied_fills_count, apply_fill_failures
     global orders_matched, orders_mismatched
     global clusters_matched, clusters_mismatched, total_quantity_delta
@@ -71,21 +86,17 @@ def close_cluster(cluster):
             t_side = event.side
             break
 
-    # F-only cluster — apply fills directly, no aggressor
+    # F-only cluster — no aggressor to reconstruct, just advance the book to truth
     if t_side is None:
         skipped_clusters += 1
         skipped_actions['F_only' if len(cluster) == 1 else 'other'] += 1
-        for event in cluster:
-            if event.action == 'F':
-                success = book.apply_fill(event.order_id, event.size)
-                if success:
-                    applied_fills_count += 1
-                else:
-                    apply_fill_failures += 1
+        apply_truth(cluster)
         return
 
-    # skip off-book prints (N-side)
+    # off-book prints (N-side): no on-book aggressor to reconcile, but still apply
+    # any fills so the book stays truthful
     if t_side == 'N':
+        apply_truth(cluster)
         return
 
     if t_side == 'A':
@@ -123,7 +134,9 @@ def close_cluster(cluster):
     pre_best_ask_price = pre_best_ask.price / 10000 if pre_best_ask else None
     pre_best_bid_price = pre_best_bid.price / 10000 if pre_best_bid else None
 
-    result = engine.process(aggressor)
+    # READ-ONLY: what would our engine fill against the current (truthful) book?
+    # simulate() does not mutate the book — the book is advanced by apply_truth() below.
+    result = engine.simulate(aggressor)
 
     # what did Databento hit?
     databento_hits = set()
@@ -179,6 +192,10 @@ def close_cluster(cluster):
     if len(result.trades) == 0:
         clusters_with_zero_trades += 1
 
+    # advance the authoritative book to ground truth (done AFTER simulate, so the
+    # engine was measured against the pre-fill book state)
+    apply_truth(cluster)
+
 
 # main loop
 for i, row in enumerate(df.itertuples()):
@@ -214,7 +231,11 @@ for i, row in enumerate(df.itertuples()):
             current_cluster = []
             last_sequence = None
         if not row.is_fill_cleanup:
-            book.cancel(row.order_id)
+            # Standalone C: shrink the order by the C's size. A full delete has
+            # size == remaining, so reduce_order takes it to 0 and removes it; a
+            # partial cancel just shrinks it. Safe now that fills are applied to
+            # named orders (below), so the book's remaining tracks ground truth.
+            book.reduce_order(row.order_id, row.size)
 
     elif row.action == 'T' or row.action == 'F':
         if len(current_cluster) > 0 and row.ts_event == current_cluster[0].ts_event:
