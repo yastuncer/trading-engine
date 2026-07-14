@@ -7,7 +7,7 @@ This project is a research-style exercise meant to show I can do the full pipeli
 Why build a matching engine when there are libraries like Backtrader for backtesting? Backtrader is good for strategy backtesting but doesn't simulate an actual order book. My simulated orders wouldn't compete for queue position against the historical orders the way they would on a real exchange. For this project I needed closed-loop simulation, where the predictions I generate get fed back into a book that behaves like a real one. Writing the engine myself also forced me to actually understand price-time priority, partial fills, and order modify semantics, which made the modeling work less mysterious.
 
 
-Raw Nasdaq ITCH data (Databento)
+Raw Nasdaq TotalView-ITCH data (via Databento)
         ↓
     Parser (Python)
         ↓
@@ -64,13 +64,13 @@ A few papers that motivate the approach. Cont, Kukanov and Stoikov (2014) show t
 
 ```
 ┌──────────────────┐
-│ DATABENTO messages │   raw event-by-event NASDAQ data
+│  Databento MBO   │   raw event-by-event Nasdaq TotalView-ITCH MBO events
 │   (DBN input)    │
 └────────┬─────────┘
          │
          ▼             
 ┌──────────────────┐
-│  Message parser  │   DATABENTO msg type → engine command (my translator)
+│  Message parser  │   Databento MBO action → engine command (my translator)
 │     (Python)     │    
 └────────┬─────────┘
          │
@@ -119,27 +119,25 @@ A few notes on why the architecture looks like this. The engine is in C++ becaus
 
 ### Source
 
-I'm using the academic sample from LOBSTER, which provides message-level (Level 3) order book data derived from NASDAQ ITCH feeds for a small set of tickers (AAPL, AMZN, GOOG, INTC, MSFT, SPY are the usual ones). Each session comes as two CSVs:
+I'm using Nasdaq TotalView-ITCH data (via Databento), which provides message-level (MBO, Level 3) order book data — every add, cancel, modify, and execution for a ticker. The engine is validated against one full session of AAPL (`aapl_20260601.dbn.zst`, ~5.4M events). Each session is a single DBN file (`.dbn.zst`) streamed as Databento MBO events, one record per event — there's no separate snapshot file, so the book is reconstructed from the event stream itself.
 
-- `*_message_*.csv`: one row per event (submission, cancel, execution, etc.)
-- `*_orderbook_*.csv`: snapshot of the top N levels of the book after each event
+Databento MBO event types (the `action` field) and how my engine handles them:
 
-LOBSTER message types and how my engine handles them:
+| Action | Meaning                                   | Engine action            |
+|--------|-------------------------------------------|--------------------------|
+| A      | Add — new resting limit order             | `add(order)`             |
+| C      | Cancel — full delete, or partial reduce   | `reduce_order(id, size)` |
+| T      | Trade — aggressor print (taker side)      | reconstruct aggressor    |
+| F      | Fill — a resting order was executed       | `apply_fill(id, size)`   |
+| R      | Reset — clear the book at session start   | `clear()`                |
 
-| Type | Meaning                          | Engine action          |
-|------|----------------------------------|------------------------|
-| 1    | New limit order submission       | `add(order)`           |
-| 2    | Cancellation (partial)           | `modify(id, new_qty)`  |
-| 3    | Cancellation (full deletion)     | `cancel(id)`           |
-| 4    | Execution (visible)              | `process(market_order)` |
-| 5    | Execution (hidden)               | trade event only       |
-| 7    | Trading halt                     | end of session         |
+Every execution arrives as a trade print (`T`) plus one or more fills (`F`), each naming the resting order it hit. I reconstruct the synthetic aggressor behind each T/F cluster and drive that through the engine.
 
-### Engine and LOBSTER reconciliation
+### Engine and Databento reconciliation
 
-This is the correctness check that everything else depends on. After replaying each message into my engine, I compare the resulting top-of-book against LOBSTER's snapshot file for that timestamp. If they diverge, there's a bug somewhere in the engine, usually in how I'm handling hidden executions or in modify semantics for partial cancels. The replay script prints the first divergence at message granularity so I can see exactly where things go wrong.
+This is the correctness check that everything else depends on. I advance the book directly from the raw events (add / cancel / fill applied to the orders they name), and for each aggressor I ask the engine — read-only, via `simulate()` — which resting orders *it* would fill, then compare that against the orders Databento actually filled. The harness reports the order-level match rate and prints the first mismatched clusters so I can see exactly where the engine and the tape disagree. The current AAPL session reconciles at **99.1% order-level match** with a positive final spread; the residual differences are intra-level FIFO priority, not book corruption.
 
-Hidden orders (type 5) are a tricky case. NASDAQ allows some order types that don't display in the visible book, used mostly by institutional traders to avoid signaling their intent. LOBSTER sees them when they execute but never while they're resting, so my engine treats a type-5 execution as a trade event for feature purposes (the volume is real and matters) but doesn't try to model the hidden order itself.
+Hidden (non-displayed) liquidity is a tricky case. Nasdaq allows order types that don't appear in the visible book, used mostly by institutional traders to avoid signaling their intent. Databento surfaces them only when they execute — as a trade print with no on-book resting order (an `N`-side print) — never while they rest, so my engine treats such a print as a trade event for feature purposes (the volume is real and matters) but doesn't try to model the hidden order itself.
 
 ### Feature pipeline
 
@@ -258,7 +256,7 @@ Reliability diagrams per class. If the model says "70% up," it should be right 7
 
 The model's predictions drive a simple market-making strategy through the engine. When the model predicts `up` with confidence above a threshold, it posts a buy at the bid; symmetric for `down`; cancel and re-quote on each event; realistic costs applied (half-spread plus a per-share fee).
 
-The whole thing runs against the historical LOBSTER replay, with simulated orders queueing against the real historical book. I compare PnL against the same strategy driven by `sign(OFI)`.
+The whole thing runs against the historical Databento MBO replay, with simulated orders queueing against the real historical book. I compare PnL against the same strategy driven by `sign(OFI)`.
 
 Comparing classification accuracy to backtest PnL is informative either way — the models might rank the same on both, or they might not, and either result tells me something about which approach is actually useful.
 
@@ -313,10 +311,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 pip install -r requirements.txt
 
-# 4. Get LOBSTER sample data
-python scripts/download_lobster_sample.py --out data/raw
+# 4. Get Databento sample data
+python scripts/download_databento_sample.py --out data/raw
 
-# 5. Replay and validate engine against LOBSTER snapshots
+# 5. Replay and reconcile the engine against Databento MBO events
 python scripts/replay.py --ticker AAPL --validate
 
 # 6. Build features and labels
@@ -337,7 +335,7 @@ All artifacts (models, metrics, plots) get written to `mlruns/`. The MLflow UI i
 
 > **TODO:** I'll fill this in honestly at the end of the project. Things I'm planning to write about:
 
-- Engine correctness: what bugs surfaced via the LOBSTER snapshot reconciliation? What did the first divergence look like?
+- Engine correctness: what bugs surfaced via the Databento reconciliation? What did the first divergence look like?
 - Feature engineering: which features ended up mattering? Were there features I expected to matter that didn't?
 - Modeling: did the sequence model beat LightGBM by enough to justify the extra complexity? What was the train/inference cost trade-off?
 - Evaluation: where did I almost introduce leakage? What checks caught it?
@@ -351,7 +349,7 @@ The planned follow-up after this project ships is a reinforcement-learning marke
 
 A few other extensions I might do, roughly in order of effort:
 
-1. More tickers, more sessions. With paid LOBSTER data or NASDAQ ITCH samples, retrain across regimes (high-vol vs low-vol days, different sectors).
+1. More tickers, more sessions. With additional Databento sessions or other Nasdaq TotalView-ITCH tickers, retrain across regimes (high-vol vs low-vol days, different sectors).
 2. Transformer architectures. Try a temporal fusion transformer on the same feature representation.
 3. Multi-horizon and multi-task heads. Predict K=10, 50, 100 jointly with a shared encoder.
 4. Latency-realistic backtest. The closed-loop test currently assumes zero-latency reactions; adding a configurable delay would show how the signal value decays.
@@ -363,7 +361,7 @@ A few other extensions I might do, roughly in order of effort:
 - Avellaneda, M., Stoikov, S. (2008). *High-frequency trading in a limit order book.* Quantitative Finance, 8(3), 217–224.
 - Cont, R., Kukanov, A., Stoikov, S. (2014). *The price impact of order book events.* Journal of Financial Econometrics, 12(1), 47–88.
 - Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., Howison, S. D. (2013). *Limit order books.* Quantitative Finance, 13(11), 1709–1742.
-- Huang, R., Polak, T. (2011). *LOBSTER: Limit Order Book Reconstructor.* https://lobsterdata.com
+- Databento. *Nasdaq TotalView-ITCH (MBO) historical market data.* https://databento.com
 - Kercheval, A. N., Zhang, Y. (2015). *Modelling high-frequency limit order book dynamics with support vector machines.* Quantitative Finance, 15(8), 1315–1329.
 - Stoikov, S. (2018). *The micro-price: a high-frequency estimator of future prices.* Quantitative Finance, 18(12), 1959–1966.
 - Zhang, Z., Zohren, S., Roberts, S. (2019). *DeepLOB: Deep convolutional neural networks for limit order books.* IEEE Transactions on Signal Processing, 67(11), 3001–3012.
