@@ -15,14 +15,39 @@ it ended up on the book
 
 
 
+// process() commits the match against the real book. simulate() runs the same
+// logic against a copy and throws that copy away — same matching, no side effects.
 MatchResult MatchingEngine::process(const Order& order) {
+    return match_impl(book_, order);
+}
+
+MatchResult MatchingEngine::simulate(const Order& order) const {
+    // read-only: ask the book what this order WOULD hit, no copy, no mutation
+    MatchResult result;
+    result.trades = book_.preview_match(order);
+
+    Quantity filled = 0;
+    for (const Trade& trade : result.trades) {
+        filled += trade.quantity;
+    }
+    if (filled >= order.remaining()) {
+        result.status = OrderStatus::Filled;
+    } else if (filled > 0) {
+        result.status = OrderStatus::PartiallyFilled;
+    } else {
+        result.status = OrderStatus::New;
+    }
+    return result;
+}
+
+MatchResult MatchingEngine::match_impl(OrderBook& book, const Order& order) {
 
     MatchResult result;
     Order incoming_order = order; // copy into a local variable to modify it durint matching
 
     if (incoming_order.side == Side::Buy) { // buy branch --> match against asks (sell orders)
         while (incoming_order.remaining() > 0) { // while the incoming order still has unfilled quantity, keep matching.
-            const PriceLevel* best_ask_level = book_.best_ask(); // calling best_ask() on the order book and then returns a ptr to best ask's PriceLevel
+            const PriceLevel* best_ask_level = book.best_ask(); // calling best_ask() on the order book and then returns a ptr to best ask's PriceLevel
             if (best_ask_level == nullptr) break; //checking if there are asks in the book
             if (incoming_order.type == OrderType::Limit) { // limit-specific;
                 if (best_ask_level->price > incoming_order.price) break; // making sure the best ask price is not > incoming price (price check)
@@ -44,12 +69,12 @@ MatchResult MatchingEngine::process(const Order& order) {
             // update the incoming order's filled quantity
             incoming_order.filled_qty += fill_qty;
             // apply the fill to the resting order
-            book_.apply_fill(resting.id, fill_qty);
+            book.apply_fill(resting.id, fill_qty);
         }
     } else {
         // sell branch --> match against bids (buy orders)
         while(incoming_order.remaining() > 0) {
-            const PriceLevel* best_bid_level = book_.best_bid();
+            const PriceLevel* best_bid_level = book.best_bid();
             if(best_bid_level == nullptr) break;
             if (incoming_order.type == OrderType::Limit) { // Limit specific
                 if(best_bid_level->price < incoming_order.price) break;
@@ -71,13 +96,13 @@ MatchResult MatchingEngine::process(const Order& order) {
             // update the incoming order's filled quantity
             incoming_order.filled_qty += fill_qty;
             // apply the fill to the resting order
-            book_.apply_fill(resting.id, fill_qty);
+            book.apply_fill(resting.id, fill_qty);
         }
-      
+
     }
     // rest the leftover (this is only for limit orders with remaining quantity)
     if (incoming_order.remaining() > 0 && incoming_order.type == OrderType::Limit) {
-        book_.add(incoming_order); // add order to the book
+        book.add(incoming_order); // add order to the book
         result.resting_order = incoming_order; // leftover ends up in the book
     }
     // setting the status based on fill state

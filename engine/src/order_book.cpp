@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <iomanip>
 #include "matching_engine.hpp"
 #include "types.hpp"
@@ -328,6 +329,140 @@ bool OrderBook::apply_fill(OrderId id, Quantity fill_qty){
 
     }
     return false;
+}
+
+
+/*
+reduce_order(id, by_qty):
+
+    A partial cancel shrinks an existing order without removing it. Databento
+    emits these as standalone C events whose size is less than the order's
+    remaining quantity. Same walk as apply_fill, but instead of crediting a
+    fill we shrink the order's total quantity by by_qty.
+
+    1. look up id in order_locations_
+    2. if not found, return false
+    3. find the right map (bids_ or asks_) based on side from location
+    4. find the price level in that map at that location's price
+    5. find the order in the level's deque
+    6. subtract by_qty from the order's quantity
+    7. if remaining is now <= 0 (a full cancel arrived as a "reduce"):
+        a. erase order from deque
+        b. if the deque is now empty, erase price level from map
+        c. erase id from order_locations_
+    8. otherwise the order stays with less quantity, do nothing more
+    9. return true
+*/
+
+bool OrderBook::reduce_order(OrderId id, Quantity by_qty){
+
+    // step 1-2
+    auto it = order_locations_.find(id);
+    if (it == order_locations_.end()) {
+        return false;
+    }
+
+    // step 3-4
+    if (it->second.side == Side::Buy) {
+        auto price_it = bids_.find(it->second.price);
+        if (price_it == bids_.end()) {
+            return false;
+        }
+        // step 5
+        PriceLevel& level = price_it->second;
+        for (auto order_it = level.orders.begin(); order_it != level.orders.end(); ++order_it) {
+            if (order_it->id == id) {
+                // step 6
+                order_it->quantity -= by_qty;
+                // step 7
+                if (order_it->remaining() <= 0) {
+                    level.orders.erase(order_it);
+                    if (level.orders.empty()) {
+                        bids_.erase(price_it);
+                    }
+                    order_locations_.erase(id);
+                }
+                // step 8-9
+                return true;
+            }
+        }
+    } else { // for asks
+        auto price_it = asks_.find(it->second.price);
+        if (price_it == asks_.end()) {
+            return false;
+        }
+        PriceLevel& level = price_it->second;
+        for (auto order_it = level.orders.begin(); order_it != level.orders.end(); ++order_it) {
+            if (order_it->id == id) {
+                order_it->quantity -= by_qty;
+                if (order_it->remaining() <= 0) {
+                    level.orders.erase(order_it);
+                    if (level.orders.empty()) {
+                        asks_.erase(price_it);
+                    }
+                    order_locations_.erase(id);
+                }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+/*
+preview_match(incoming):
+
+    Same price-time walk that MatchingEngine::process performs, but READ-ONLY —
+    it reports which resting orders an incoming order would hit without mutating
+    anything. Used by the reconciliation harness to ask "what would our engine
+    fill here?" without disturbing the book that tracks ground truth. Cheap: it
+    only visits the orders it actually fills (no whole-book copy).
+*/
+std::vector<Trade> OrderBook::preview_match(const Order& incoming) const {
+
+    std::vector<Trade> hits;
+    Quantity remaining = incoming.remaining(); // how much of the incoming is still unfilled
+
+    if (incoming.side == Side::Buy) {
+        // a buy walks the asks from lowest price up
+        for (const auto& [price, level] : asks_) {
+            if (remaining <= 0) break;
+            // limit orders stop once the book price is worse than their limit; markets never do
+            if (incoming.type == OrderType::Limit && price > incoming.price) break;
+            for (const Order& resting : level.orders) { // FIFO within the level
+                if (remaining <= 0) break;
+                Quantity fill_qty = std::min(remaining, resting.remaining());
+                Trade trade;
+                trade.buy_order_id = incoming.id;
+                trade.sell_order_id = resting.id;
+                trade.price = resting.price; // resting order committed to its price first
+                trade.quantity = fill_qty;
+                trade.timestamp = now();
+                hits.push_back(trade);
+                remaining -= fill_qty;
+            }
+        }
+    } else {
+        // a sell walks the bids from highest price down
+        for (const auto& [price, level] : bids_) {
+            if (remaining <= 0) break;
+            if (incoming.type == OrderType::Limit && price < incoming.price) break;
+            for (const Order& resting : level.orders) {
+                if (remaining <= 0) break;
+                Quantity fill_qty = std::min(remaining, resting.remaining());
+                Trade trade;
+                trade.buy_order_id = resting.id;
+                trade.sell_order_id = incoming.id;
+                trade.price = resting.price;
+                trade.quantity = fill_qty;
+                trade.timestamp = now();
+                hits.push_back(trade);
+                remaining -= fill_qty;
+            }
+        }
+    }
+    return hits;
 }
 
 

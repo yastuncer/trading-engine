@@ -72,6 +72,7 @@ PYBIND11_MODULE(trading_engine, m) {
         .def("best_ask", &OrderBook::best_ask, py::return_value_policy::reference_internal)
         .def("print", &OrderBook::print, py::arg("depth") = 5)
         .def("apply_fill", &OrderBook::apply_fill)
+        .def("reduce_order", &OrderBook::reduce_order)
         .def("clear", &OrderBook::clear);
 
     // MatchResult
@@ -85,6 +86,7 @@ PYBIND11_MODULE(trading_engine, m) {
     py::class_<MatchingEngine>(m, "MatchingEngine")
         .def(py::init<>())
         .def("process", &MatchingEngine::process)
+        .def("simulate", &MatchingEngine::simulate)
         .def("get_book", &MatchingEngine::get_book, py::return_value_policy::reference);
 
 
