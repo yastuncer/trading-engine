@@ -5,6 +5,9 @@ import trading_engine
 import databento as db
 import pandas as pd
 
+import time
+_parser_start_time = time.time()
+
 '''
 Aggressor Order {
     id         = synthetic_id (parser-generated)
@@ -272,3 +275,7 @@ print(f"Total quantity delta on mismatches: {total_quantity_delta:,} shares")
 total = orders_matched + orders_mismatched
 print(f"\nOrder-level reconciliation: {orders_matched:,} / {total:,} clusters have identical resting-order hits ({100*orders_matched/total:.1f}%)")
 print(f"  Clusters where engine produced 0 trades: {clusters_with_zero_trades:,}")
+
+
+elapsed = time.time() - _parser_start_time
+print(f"Elapsed: {elapsed:.1f}s | Throughput: {len(df) / elapsed:,.0f} events/sec")
